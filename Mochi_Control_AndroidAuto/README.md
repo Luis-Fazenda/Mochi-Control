@@ -105,3 +105,8 @@ O workflow também inicia automaticamente quando houver um push nas branches `ma
 - O GitHub Actions compila o código; ele não testa conexão BLE física nem garante que a multimídia aceite o app no Android Auto.
 - Se a compilação falhar, abra a execução em Actions, copie o primeiro bloco `FAILURE: Build failed with an exception` e envie aqui para correção.
 - Não coloque chaves privadas, senhas ou arquivos de assinatura no repositório.
+
+
+## GitHub Actions APK
+
+O workflow `.github/workflows/build-apk.yml` compila o APK de depuração automaticamente quando há alterações nesta pasta ou quando executado manualmente pela aba Actions. O arquivo gerado fica disponível no artifact `Mochi-Control-debug-apk`.
