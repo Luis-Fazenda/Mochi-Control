@@ -155,27 +155,59 @@ object BleMochi {
             }
 
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-                if (status != BluetoothGatt.GATT_SUCCESS) return
-                val service = g.getService(UUID.fromString(SERVICE_UUID)) ?: return
-                commandCharacteristic = service.getCharacteristic(UUID.fromString(COMMAND_UUID))
-                val ch = commandCharacteristic ?: run {
-                    statusText = "Serviço BLE do Mochi não encontrado"
+                if (status != BluetoothGatt.GATT_SUCCESS) {
                     connected = false
+                    commandCharacteristic = null
+                    statusText = "Falha ao descobrir serviços BLE (código $status)."
+                    onUpdate(statusText)
                     return
                 }
+
+                val service = g.getService(UUID.fromString(SERVICE_UUID))
+                if (service == null) {
+                    connected = false
+                    commandCharacteristic = null
+                    statusText = "Bluetooth conectado, mas o serviço Mochi não foi encontrado. Verifique o UUID/firmware."
+                    onUpdate(statusText)
+                    return
+                }
+
+                val ch = service.getCharacteristic(UUID.fromString(COMMAND_UUID))
+                if (ch == null) {
+                    connected = false
+                    commandCharacteristic = null
+                    statusText = "Serviço Mochi encontrado, mas a característica de comando está ausente."
+                    onUpdate(statusText)
+                    return
+                }
+
+                commandCharacteristic = ch
                 connected = true
-                statusText = "Conectado ao Mochi-Car"
-                g.setCharacteristicNotification(ch, true)
+                statusText = "Conectado ao Mochi-Car!"
+                onUpdate(statusText)
+
+                val notificationSet = g.setCharacteristicNotification(ch, true)
                 val descriptor = ch.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
                 if (descriptor != null) {
                     if (Build.VERSION.SDK_INT >= 33) {
-                        g.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                        val result = g.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                        if (result != BluetoothGatt.GATT_SUCCESS) {
+                            statusText = "Conectado; aviso de estado BLE não ativado ($result)."
+                            onUpdate(statusText)
+                        }
                     } else {
                         @Suppress("DEPRECATION")
                         descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                         @Suppress("DEPRECATION")
-                        g.writeDescriptor(descriptor)
+                        val result = g.writeDescriptor(descriptor)
+                        if (!result) {
+                            statusText = "Conectado; aviso de estado BLE não ativado."
+                            onUpdate(statusText)
+                        }
                     }
+                } else if (!notificationSet) {
+                    statusText = "Conectado; notificações BLE indisponíveis."
+                    onUpdate(statusText)
                 }
             }
         }, BluetoothDevice.TRANSPORT_LE)
