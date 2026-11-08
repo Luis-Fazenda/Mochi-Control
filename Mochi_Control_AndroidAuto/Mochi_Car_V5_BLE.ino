@@ -184,8 +184,12 @@ unsigned long nextSpecialTime = 0;
 unsigned long specialUntil = 0;
 
 bool specialActive = false;
-// Expressao manual fica fixa ate o usuario pedir variacao.
+uint8_t activeSpecialEvent = 0;
 bool sceneVariationEnabled = true;
+bool customFaceActive = false;
+char customEyeShape = 'r';
+char customEmotion = 'h';
+char customEffect = 'n';
 bool lookingRight = true;
 
 bool startupSequence = true;
@@ -322,6 +326,440 @@ void normalEyes() {
   roboEyes.setSpacebetween(12);
 }
 
+
+// =====================================================
+// RENDERIZADOR PROPRIO DE EXPRESSOES - MOCHI V5.1
+// Desenha olhos, sobrancelhas, boca e detalhes diretamente
+// no SSD1306. Nao depende dos mesmos 4 humores do RoboEyes.
+// =====================================================
+
+void drawEyeCustom(int cx, int cy, int w, int h,
+                   int pupilDx = 0, int pupilDy = 0,
+                   int lidTop = 0, int pupilRadius = 5) {
+  int x = cx - w / 2;
+  int y = cy - h / 2;
+  display.fillRoundRect(x, y, w, h, min(8, h / 3), WHITE);
+  if (lidTop > 0) {
+    display.fillRect(x - 1, y - 1, w + 2, min(lidTop, h), BLACK);
+  }
+  int px = constrain(cx + pupilDx, x + 4, x + w - 4);
+  int py = constrain(cy + pupilDy, y + 4, y + h - 4);
+  display.fillCircle(px, py, min(pupilRadius, max(2, h / 4)), BLACK);
+  display.fillCircle(px - 2, py - 2, 1, WHITE);
+}
+
+void drawClosedEyeCustom(int cx, int cy, int w, bool happy = false) {
+  int half = w / 2;
+  if (happy) {
+    display.drawLine(cx - half, cy + 3, cx - half / 2, cy - 2, WHITE);
+    display.drawLine(cx - half / 2, cy - 2, cx, cy - 4, WHITE);
+    display.drawLine(cx, cy - 4, cx + half / 2, cy - 2, WHITE);
+    display.drawLine(cx + half / 2, cy - 2, cx + half, cy + 3, WHITE);
+    display.drawLine(cx - half + 2, cy + 4, cx + half - 2, cy + 4, WHITE);
+  } else {
+    display.drawLine(cx - half, cy, cx + half, cy, WHITE);
+    display.drawLine(cx - half + 3, cy + 2, cx + half - 3, cy + 2, WHITE);
+  }
+}
+
+void drawArcCustom(int cx, int cy, int rx, int ry,
+                   int startDeg, int endDeg) {
+  int lastX = 0, lastY = 0;
+  bool first = true;
+  for (int a = startDeg; a <= endDeg; a += 6) {
+    float rad = a * 0.0174532925f;
+    int x = cx + (int)(cos(rad) * rx);
+    int y = cy + (int)(sin(rad) * ry);
+    if (!first) display.drawLine(lastX, lastY, x, y, WHITE);
+    lastX = x;
+    lastY = y;
+    first = false;
+  }
+}
+
+void drawSmileCustom(int cx = 64, int cy = 54, int width = 15) {
+  drawArcCustom(cx, cy, width, 6, 15, 165);
+}
+
+void drawFrownCustom(int cx = 64, int cy = 58, int width = 13) {
+  drawArcCustom(cx, cy, width, 6, 195, 345);
+}
+
+void drawOpenMouthCustom(int cx = 64, int cy = 53, int w = 9, int h = 9) {
+  display.fillRoundRect(cx - w / 2, cy - h / 2, w, h, 4, WHITE);
+  display.fillRoundRect(cx - w / 2 + 2, cy - h / 2 + 2,
+                        w - 4, h - 4, 3, BLACK);
+}
+
+void drawAngryBrowsCustom() {
+  display.drawLine(22, 8, 48, 15, WHITE);
+  display.drawLine(80, 15, 106, 8, WHITE);
+  display.drawLine(23, 9, 47, 16, WHITE);
+  display.drawLine(81, 16, 105, 9, WHITE);
+}
+
+void drawWorriedBrowsCustom() {
+  display.drawLine(22, 14, 48, 7, WHITE);
+  display.drawLine(80, 7, 106, 14, WHITE);
+}
+
+void drawRaisedBrowCustom(bool left = true) {
+  if (left) {
+    display.drawLine(24, 8, 48, 4, WHITE);
+    display.drawLine(80, 12, 104, 12, WHITE);
+  } else {
+    display.drawLine(24, 12, 48, 12, WHITE);
+    display.drawLine(80, 4, 104, 8, WHITE);
+  }
+}
+
+void drawBlushCustom() {
+  for (int i = 0; i < 3; i++) {
+    display.drawPixel(12 + i * 3, 45 + (i % 2), WHITE);
+    display.drawPixel(113 + i * 3, 45 + (i % 2), WHITE);
+  }
+}
+
+void drawHeartCustom(int x, int y, int s = 5) {
+  display.fillCircle(x - s / 2, y, s / 2 + 1, WHITE);
+  display.fillCircle(x + s / 2, y, s / 2 + 1, WHITE);
+  display.fillTriangle(x - s, y + 1, x + s, y + 1, x, y + s + 4, WHITE);
+}
+
+void drawTearCustom(int x, int y) {
+  display.fillCircle(x, y, 3, WHITE);
+  display.fillTriangle(x - 2, y, x + 2, y, x, y + 7, WHITE);
+}
+
+void drawSparkCustom(int x, int y) {
+  display.drawLine(x - 4, y, x + 4, y, WHITE);
+  display.drawLine(x, y - 4, x, y + 4, WHITE);
+  display.drawLine(x - 3, y - 3, x + 3, y + 3, WHITE);
+  display.drawLine(x - 3, y + 3, x + 3, y - 3, WHITE);
+}
+
+void renderCustomFace() {
+  static unsigned long lastFrame = 0;
+  if ((unsigned long)(millis() - lastFrame) < 35) return;
+  lastFrame = millis();
+
+  display.clearDisplay();
+
+  // Pequena animacao de inicializacao, sem alterar o restante do firmware.
+  if (currentScreen == SCREEN_HOME && startupSequence) {
+    unsigned long elapsed = millis() - startupTime;
+    if (elapsed < 700) {
+      drawClosedEyeCustom(38, 31, 27, false);
+      drawClosedEyeCustom(90, 31, 27, false);
+    } else if (elapsed < 1600) {
+      drawEyeCustom(38, 31, 25, 28);
+      drawEyeCustom(90, 31, 25, 28);
+    } else {
+      drawClosedEyeCustom(38, 31, 27, true);
+      drawClosedEyeCustom(90, 31, 27, true);
+      drawSmileCustom(64, 55, 14);
+    }
+    display.display();
+    return;
+  }
+
+  // Editor V5.2: combinacoes personalizadas criadas no aplicativo.
+  if (customFaceActive) {
+    int eyeW = customEyeShape == 'q' ? 30 : 27;
+    int eyeH = customEyeShape == 's' ? 17 : 27;
+    if (customEyeShape == 'q') {
+      display.fillRoundRect(24, 18, eyeW, eyeH, 3, WHITE);
+      display.fillRoundRect(76, 18, eyeW, eyeH, 3, WHITE);
+    } else {
+      drawEyeCustom(38, 31, eyeW, eyeH, 0, 0, 0, customEyeShape == 's' ? 2 : 6);
+      drawEyeCustom(90, 31, eyeW, eyeH, 0, 0, 0, customEyeShape == 's' ? 2 : 6);
+    }
+    switch (customEmotion) {
+      case 's':
+        display.drawLine(24, 13, 49, 18, WHITE);
+        display.drawLine(79, 18, 104, 13, WHITE);
+        drawArcCustom(64, 58, 9, 5, 20, 160);
+        break;
+      case 'a':
+        drawAngryBrowsCustom();
+        display.drawLine(57, 55, 71, 55, WHITE);
+        break;
+      case 'u':
+        display.drawCircle(64, 53, 5, WHITE);
+        break;
+      case 'd':
+        display.drawLine(56, 53, 72, 53, WHITE);
+        display.drawLine(88, 12, 100, 7, WHITE);
+        break;
+      default:
+        drawSmileCustom(64, 54, 13);
+        break;
+    }
+    if (customEffect == 'b') drawBlushCustom();
+    else if (customEffect == 'p') { drawSparkCustom(15, 13); drawSparkCustom(112, 13); }
+    else if (customEffect == 'c') drawHeartCustom(64, 8, 5);
+    display.display();
+    return;
+  }
+
+  // Eventos espontaneos tambem possuem desenho proprio no novo renderizador.
+  if (specialActive) {
+    if (activeSpecialEvent == 0) {
+      drawClosedEyeCustom(38, 31, 28, true);
+      drawEyeCustom(90, 31, 27, 30, 0, 0, 0, 5);
+    } else if (activeSpecialEvent == 1) {
+      drawClosedEyeCustom(38, 31, 31, true);
+      drawClosedEyeCustom(90, 31, 31, true);
+      drawSmileCustom(64, 53, 20);
+    } else if (activeSpecialEvent == 2) {
+      drawEyeCustom(38, 31, 27, 29, -5, 0, 0, 5);
+      drawEyeCustom(90, 31, 27, 22, 5, 0, 0, 5);
+      drawRaisedBrowCustom(false);
+      drawOpenMouthCustom(64, 54, 7, 7);
+    } else {
+      drawEyeCustom(38, 31, 27, 24, 0, 5, 14, 5);
+      drawEyeCustom(90, 31, 27, 24, 0, 5, 14, 5);
+      drawArcCustom(64, 54, 5, 3, 190, 350);
+    }
+    display.display();
+    return;
+  }
+
+  int gaze = 0;
+  if (currentScene == SCENE_OLHAR_ESQUERDA) gaze = -7;
+  if (currentScene == SCENE_OLHAR_DIREITA) gaze = 7;
+  if (currentScene == SCENE_OLHAR_CIMA) gaze = -5;
+  if (currentScene == SCENE_OLHAR_BAIXO) gaze = 6;
+  if (currentScene == SCENE_CURIOUS || currentScene == SCENE_DEBOCHADO ||
+      currentScene == SCENE_DUVIDANDO || currentScene == SCENE_BORED ||
+      currentScene == SCENE_DESORIENTADO) gaze = lookingRight ? 6 : -6;
+
+  switch (currentScene) {
+    case SCENE_HAPPY:
+    case SCENE_SIMPATICO:
+      drawClosedEyeCustom(38, 31, 28, true);
+      drawClosedEyeCustom(90, 31, 28, true);
+      drawSmileCustom();
+      if (currentScene == SCENE_SIMPATICO) drawBlushCustom();
+      break;
+
+    case SCENE_SLEEPY:
+      drawEyeCustom(38, 31, 27, 24, 0, 5, 13, 5);
+      drawEyeCustom(90, 31, 27, 24, 0, 5, 13, 5);
+      drawArcCustom(64, 54, 5, 3, 190, 350);
+      break;
+
+    case SCENE_GRUMPY:
+    case SCENE_IRRITADO:
+      drawEyeCustom(38, 32, 28, 25, 0, 2, 5, 5);
+      drawEyeCustom(90, 32, 28, 25, 0, 2, 5, 5);
+      drawAngryBrowsCustom();
+      display.drawLine(57, 54, 71, 54, WHITE);
+      break;
+
+    case SCENE_CURIOUS:
+      drawEyeCustom(38, 30, 31, 34, gaze, 0, 0, 6);
+      drawEyeCustom(90, 32, 23, 25, gaze, 0, 0, 5);
+      drawRaisedBrowCustom(true);
+      drawOpenMouthCustom(64, 54, 7, 7);
+      break;
+
+    case SCENE_EXCITED:
+      drawEyeCustom(38, 30, 29, 35, 0, 0, 0, 7);
+      drawEyeCustom(90, 30, 29, 35, 0, 0, 0, 7);
+      drawSparkCustom(13, 25);
+      drawSparkCustom(115, 25);
+      drawSmileCustom(64, 54, 19);
+      break;
+
+    case SCENE_SHY:
+      drawEyeCustom(38, 31, 24, 22, 0, 7, 5, 4);
+      drawEyeCustom(90, 31, 24, 22, 0, 7, 5, 4);
+      drawBlushCustom();
+      drawSmileCustom(64, 56, 7);
+      break;
+
+    case SCENE_SURPRISED:
+    case SCENE_IMPRESSIONADO:
+      drawEyeCustom(38, 30, 31, 36, 0, 0, 0, 4);
+      drawEyeCustom(90, 30, 31, 36, 0, 0, 0, 4);
+      drawRaisedBrowCustom(true);
+      drawOpenMouthCustom(64, 54, 10, 12);
+      if (currentScene == SCENE_IMPRESSIONADO) {
+        drawSparkCustom(12, 19);
+        drawSparkCustom(116, 19);
+      }
+      break;
+
+    case SCENE_CONFUSED:
+      drawEyeCustom(38, 31, 27, 29, -4, 1, 0, 5);
+      drawEyeCustom(90, 31, 27, 22, 5, -1, 0, 5);
+      drawRaisedBrowCustom(false);
+      display.drawLine(59, 54, 68, 51, WHITE);
+      display.drawLine(68, 51, 73, 54, WHITE);
+      break;
+
+    case SCENE_LAUGHING:
+    case SCENE_GARGALHADA:
+      drawClosedEyeCustom(38, 31, 31, true);
+      drawClosedEyeCustom(90, 31, 31, true);
+      drawSmileCustom(64, 53, currentScene == SCENE_GARGALHADA ? 24 : 19);
+      if (currentScene == SCENE_GARGALHADA) {
+        display.drawLine(53, 57, 75, 57, WHITE);
+      }
+      break;
+
+    case SCENE_BORED:
+      drawEyeCustom(38, 31, 28, 28, -6, 2, 15, 5);
+      drawEyeCustom(90, 31, 28, 28, -6, 2, 15, 5);
+      display.drawLine(57, 55, 71, 55, WHITE);
+      break;
+
+    case SCENE_DEBOCHADO:
+      drawEyeCustom(38, 31, 28, 29, 7, 1, 13, 5);
+      drawEyeCustom(90, 31, 28, 29, 7, 1, 3, 5);
+      drawRaisedBrowCustom(false);
+      drawArcCustom(65, 51, 12, 5, 190, 330);
+      break;
+
+    case SCENE_PISCADINHA:
+      drawClosedEyeCustom(38, 31, 29, true);
+      drawEyeCustom(90, 31, 27, 30, 0, 0, 0, 5);
+      drawSmileCustom(64, 55, 12);
+      break;
+
+    case SCENE_CONFIANTE:
+      drawEyeCustom(38, 32, 29, 27, 0, 1, 13, 5);
+      drawEyeCustom(90, 32, 29, 27, 0, 1, 13, 5);
+      display.drawLine(24, 10, 48, 10, WHITE);
+      display.drawLine(80, 10, 104, 10, WHITE);
+      drawArcCustom(68, 52, 10, 4, 195, 330);
+      break;
+
+    case SCENE_DUVIDANDO:
+      drawEyeCustom(38, 31, 27, 28, 6, 0, 0, 5);
+      drawEyeCustom(90, 31, 27, 28, 6, 0, 0, 5);
+      drawRaisedBrowCustom(true);
+      display.drawLine(60, 54, 69, 54, WHITE);
+      display.drawPixel(73, 52, WHITE);
+      break;
+
+    case SCENE_OLA:
+      drawEyeCustom(38, 31, 27, 29, -5, 0, 0, 5);
+      drawEyeCustom(90, 31, 27, 29, -5, 0, 0, 5);
+      drawSmileCustom();
+      display.drawLine(111, 47, 116, 39, WHITE);
+      display.drawLine(116, 39, 120, 46, WHITE);
+      display.drawLine(116, 39, 116, 32, WHITE);
+      break;
+
+    case SCENE_OBRIGADO:
+      drawClosedEyeCustom(38, 31, 28, true);
+      drawClosedEyeCustom(90, 31, 28, true);
+      drawSmileCustom(64, 55, 12);
+      drawHeartCustom(64, 10, 5);
+      break;
+
+    case SCENE_FOI_MAL:
+      drawEyeCustom(38, 32, 27, 25, 0, 5, 8, 5);
+      drawEyeCustom(90, 32, 27, 25, 0, 5, 8, 5);
+      drawWorriedBrowsCustom();
+      drawFrownCustom();
+      break;
+
+    case SCENE_CARINHO:
+      drawClosedEyeCustom(38, 32, 29, true);
+      drawClosedEyeCustom(90, 32, 29, true);
+      drawHeartCustom(64, 10, 7);
+      drawSmileCustom(64, 55, 13);
+      break;
+
+    case SCENE_ALERTA:
+      drawEyeCustom(38, 30, 29, 35, 0, -2, 0, 6);
+      drawEyeCustom(90, 30, 29, 35, 0, -2, 0, 6);
+      drawRaisedBrowCustom(true);
+      display.drawLine(64, 5, 64, 13, WHITE);
+      display.drawPixel(64, 17, WHITE);
+      break;
+
+    case SCENE_FOCADO:
+      drawEyeCustom(38, 31, 30, 24, 0, 0, 8, 6);
+      drawEyeCustom(90, 31, 30, 24, 0, 0, 8, 6);
+      display.drawLine(22, 10, 49, 10, WHITE);
+      display.drawLine(79, 10, 106, 10, WHITE);
+      display.drawLine(59, 55, 69, 55, WHITE);
+      break;
+
+    case SCENE_TRISTE:
+      drawEyeCustom(38, 32, 28, 25, 0, 6, 5, 5);
+      drawEyeCustom(90, 32, 28, 25, 0, 6, 5, 5);
+      drawWorriedBrowsCustom();
+      drawTearCustom(22, 43);
+      drawTearCustom(106, 43);
+      drawFrownCustom(64, 59, 10);
+      break;
+
+    case SCENE_ASSUSTADO:
+      drawEyeCustom(38, 30, 33, 37, 0, 0, 0, 4);
+      drawEyeCustom(90, 30, 33, 37, 0, 0, 0, 4);
+      drawOpenMouthCustom(64, 55, 8, 12);
+      break;
+
+    case SCENE_DESESPERADO:
+      drawEyeCustom(38, 30, 31, 35, -4, 2, 0, 6);
+      drawEyeCustom(90, 30, 31, 35, 4, 2, 0, 6);
+      drawWorriedBrowsCustom();
+      drawTearCustom(14, 31);
+      drawTearCustom(114, 31);
+      display.drawLine(57, 54, 61, 50, WHITE);
+      display.drawLine(61, 50, 66, 57, WHITE);
+      display.drawLine(66, 57, 72, 51, WHITE);
+      break;
+
+    case SCENE_DESORIENTADO:
+      drawEyeCustom(38, 31, 28, 30, -7, -2, 0, 5);
+      drawEyeCustom(90, 31, 28, 30, 7, 3, 0, 5);
+      drawRaisedBrowCustom(false);
+      drawArcCustom(64, 54, 5, 4, 30, 330);
+      break;
+
+    case SCENE_PREOCUPADO:
+      drawEyeCustom(38, 32, 27, 25, 0, 4, 9, 5);
+      drawEyeCustom(90, 32, 27, 25, 0, 4, 9, 5);
+      drawWorriedBrowsCustom();
+      drawFrownCustom(64, 58, 8);
+      break;
+
+    case SCENE_OLHAR_ESQUERDA:
+      drawEyeCustom(38, 31, 28, 31, -7, 0, 0, 6);
+      drawEyeCustom(90, 31, 28, 31, -7, 0, 0, 6);
+      break;
+
+    case SCENE_OLHAR_DIREITA:
+      drawEyeCustom(38, 31, 28, 31, 7, 0, 0, 6);
+      drawEyeCustom(90, 31, 28, 31, 7, 0, 0, 6);
+      break;
+
+    case SCENE_OLHAR_CIMA:
+      drawEyeCustom(38, 31, 28, 31, 0, -6, 0, 6);
+      drawEyeCustom(90, 31, 28, 31, 0, -6, 0, 6);
+      break;
+
+    case SCENE_OLHAR_BAIXO:
+      drawEyeCustom(38, 31, 28, 31, 0, 6, 0, 6);
+      drawEyeCustom(90, 31, 28, 31, 0, 6, 0, 6);
+      break;
+
+    case SCENE_NORMAL:
+    default:
+      drawEyeCustom(38, 31, 27, 31, gaze, 0, 0, 6);
+      drawEyeCustom(90, 31, 27, 31, gaze, 0, 0, 6);
+      break;
+  }
+
+  display.display();
+}
+
 const char* getModeName() {
   return modeNames[(uint8_t)currentMode];
 }
@@ -411,7 +849,14 @@ MochiScene chooseSceneForMode() {
   static const MochiScene automaticPool[] = {
     SCENE_NORMAL, SCENE_HAPPY, SCENE_SLEEPY, SCENE_GRUMPY,
     SCENE_CURIOUS, SCENE_EXCITED, SCENE_SHY, SCENE_SURPRISED,
-    SCENE_CONFUSED, SCENE_LAUGHING, SCENE_BORED
+    SCENE_CONFUSED, SCENE_LAUGHING, SCENE_BORED,
+    SCENE_DEBOCHADO, SCENE_GARGALHADA, SCENE_PISCADINHA,
+    SCENE_CONFIANTE, SCENE_DUVIDANDO, SCENE_IMPRESSIONADO,
+    SCENE_IRRITADO, SCENE_SIMPATICO, SCENE_OLA, SCENE_OBRIGADO,
+    SCENE_FOI_MAL, SCENE_CARINHO, SCENE_ALERTA, SCENE_FOCADO,
+    SCENE_TRISTE, SCENE_ASSUSTADO, SCENE_DESESPERADO,
+    SCENE_DESORIENTADO, SCENE_PREOCUPADO, SCENE_OLHAR_ESQUERDA,
+    SCENE_OLHAR_DIREITA, SCENE_OLHAR_CIMA, SCENE_OLHAR_BAIXO
   };
 
   const MochiScene* pool = automaticPool;
@@ -455,6 +900,7 @@ MochiScene chooseSceneForMode() {
 // =====================================================
 
 void startScene(MochiScene scene) {
+  customFaceActive = false;
   currentScene = scene;
   specialActive = false;
 
@@ -657,7 +1103,6 @@ void startScene(MochiScene scene) {
   Serial.println(sceneNames[(uint8_t)scene]);
 }
 
-// Selecao explicita pelo usuario: trava a expressao atual.
 void selectSceneManually(MochiScene scene) {
   sceneVariationEnabled = false;
   specialActive = false;
@@ -703,6 +1148,7 @@ void startSpecialEvent() {
   if (!sceneVariationEnabled || specialActive) return;
 
   uint8_t event = random(0, 4);
+  activeSpecialEvent = event;
 
   specialActive = true;
   specialUntil = millis() + 1300;
@@ -917,10 +1363,11 @@ void returnHome() {
   currentScreen = SCREEN_HOME;
   specialActive = false;
   transitionPending = false;
-  applyMode();
-  if (sceneVariationEnabled) startScene(chooseSceneForMode());
-  else startScene(currentScene);
-  scheduleNextSpecial();
+  if (sceneVariationEnabled) {
+    applyMode();
+    startScene(chooseSceneForMode());
+    scheduleNextSpecial();
+  }
 }
 
 void selectMenuItem() {
@@ -932,8 +1379,7 @@ void selectMenuItem() {
     case 1:
       currentScreen = SCREEN_ANIMATIONS;
       applyMode();
-      if (sceneVariationEnabled) startScene(chooseSceneForMode());
-      else startScene(currentScene);
+      startScene(chooseSceneForMode());
       break;
 
     case 2:
@@ -1031,6 +1477,23 @@ void processPendingBleCommand() {
   else if (!strcmp(command, "SCENE:OLHAR_DIREITA")) selectSceneManually(SCENE_OLHAR_DIREITA);
   else if (!strcmp(command, "SCENE:OLHAR_CIMA")) selectSceneManually(SCENE_OLHAR_CIMA);
   else if (!strcmp(command, "SCENE:OLHAR_BAIXO")) selectSceneManually(SCENE_OLHAR_BAIXO);
+  else if (!strncmp(command, "CUSTOM:", 7)) {
+    char eye = 'r', emotion = 'h', effect = 'n';
+    if (sscanf(command + 7, "%c,%c,%c", &eye, &emotion, &effect) == 3 &&
+        (eye == 'r' || eye == 's' || eye == 'q') &&
+        (emotion == 'h' || emotion == 's' || emotion == 'a' || emotion == 'u' || emotion == 'd') &&
+        (effect == 'n' || effect == 'b' || effect == 'p' || effect == 'c')) {
+      customEyeShape = eye;
+      customEmotion = emotion;
+      customEffect = effect;
+      customFaceActive = true;
+      sceneVariationEnabled = false;
+      specialActive = false;
+      currentScene = SCENE_ALERTA;
+      scheduleNextScene();
+      Serial.println("Expressao personalizada aplicada");
+    }
+  }
   else if (!strcmp(command, "MUSIC:NEXT"))       musicStyle = (musicStyle + 1) % 3;
   else if (!strcmp(command, "TRIP:TOGGLE"))      toggleTrip();
   else if (!strcmp(command, "TRIP:RESET"))       resetTrip();
@@ -1095,6 +1558,7 @@ void animationShortPress() {
       break;
 
     case SCREEN_ANIMATIONS:
+      sceneVariationEnabled = true;
       startScene(chooseSceneForMode());
       break;
 
@@ -1176,10 +1640,11 @@ void setScreenRemote(ScreenState target) {
   } else if (target == SCREEN_HOME || target == SCREEN_ANIMATIONS) {
     specialActive = false;
     transitionPending = false;
-    applyMode();
-    if (sceneVariationEnabled) startScene(chooseSceneForMode());
-    else startScene(currentScene);
-    scheduleNextSpecial();
+    if (sceneVariationEnabled) {
+      applyMode();
+      startScene(chooseSceneForMode());
+      scheduleNextSpecial();
+    }
   }
 }
 
@@ -1247,8 +1712,6 @@ void loop() {
   if (currentScreen == SCREEN_HOME ||
       currentScreen == SCREEN_ANIMATIONS) {
 
-    roboEyes.update();
-
     if (currentScreen == SCREEN_HOME) {
       updateHomeAnimations();
     } else {
@@ -1268,6 +1731,15 @@ void loop() {
       }
     }
 
+    // Preserva integralmente o visual original da RoboEyes nas 23
+    // expressoes ja existentes. O renderizador proprio e usado apenas
+    // nas 11 expressoes adicionais (ALERTA em diante).
+    if ((uint8_t)currentScene >= (uint8_t)SCENE_ALERTA &&
+        !specialActive && !transitionPending && !startupSequence) {
+      renderCustomFace();
+    } else {
+      roboEyes.update();
+    }
     return;
   }
 
