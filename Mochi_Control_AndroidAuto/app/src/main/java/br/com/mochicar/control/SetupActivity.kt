@@ -160,6 +160,23 @@ class SetupActivity : Activity() {
             )
         )
 
+        addSection("NOVAS EXPRESSÕES", "Mais olhares e emoções inspirados no RobotEye")
+        addGrid(
+            listOf(
+                Tile("!", "Alerta", "SCENE:ALERTA", cyan),
+                Tile("◎", "Focado", "SCENE:FOCADO", purple),
+                Tile("☹", "Triste", "SCENE:TRISTE", cyan),
+                Tile("◉", "Assustado", "SCENE:ASSUSTADO", purple),
+                Tile("…", "Desesperado", "SCENE:DESESPERADO", cyan),
+                Tile("↯", "Desorientado", "SCENE:DESORIENTADO", purple),
+                Tile("?", "Preocupado", "SCENE:PREOCUPADO", cyan),
+                Tile("←", "Olhar esquerda", "SCENE:OLHAR_ESQUERDA", purple),
+                Tile("→", "Olhar direita", "SCENE:OLHAR_DIREITA", cyan),
+                Tile("↑", "Olhar cima", "SCENE:OLHAR_CIMA", purple),
+                Tile("↓", "Olhar baixo", "SCENE:OLHAR_BAIXO", cyan)
+            )
+        )
+
         addSection("MÚSICA", "Controles do visual musical")
         addGrid(listOf(Tile("♫", "Trocar visual", "MUSIC:NEXT", purple)))
 
