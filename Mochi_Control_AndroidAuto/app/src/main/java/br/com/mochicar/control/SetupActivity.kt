@@ -2,6 +2,9 @@ package br.com.mochicar.control
 
 import android.Manifest
 import android.app.Activity
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -14,132 +17,242 @@ import android.widget.Toast
 
 class SetupActivity : Activity() {
     private lateinit var status: TextView
-    private lateinit var connectButton: Button
+    private lateinit var connectButton: TextView
     private lateinit var controls: LinearLayout
     private val permissionRequest = 77
 
+    private val bg = Color.rgb(10, 14, 28)
+    private val panel = Color.rgb(21, 28, 48)
+    private val tile = Color.rgb(30, 39, 64)
+    private val muted = Color.rgb(158, 171, 198)
+    private val white = Color.rgb(241, 245, 255)
+    private val cyan = Color.rgb(75, 210, 235)
+    private val purple = Color.rgb(153, 119, 255)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        if (Build.VERSION.SDK_INT >= 23) {
+            window.decorView.systemUiVisibility = 0
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 18, 20, 18)
+            setBackgroundColor(bg)
         }
-        val scroll = ScrollView(this)
+        val scroll = ScrollView(this).apply { clipToPadding = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(18), dp(18), dp(18), dp(30))
+        }
+
+        val brand = TextView(this).apply {
+            text = "MOCHI  /  CONTROL"
+            textSize = 12f
+            letterSpacing = 0.18f
+            setTextColor(cyan)
+            typeface = Typeface.DEFAULT_BOLD
         }
         val title = TextView(this).apply {
-            text = "MOCHI CONTROL"
-            textSize = 28f
-            gravity = Gravity.CENTER
-            setPadding(0, 10, 0, 8)
+            text = "Seu Mochi,\nno seu controle."
+            textSize = 30f
+            setTextColor(white)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(7), 0, dp(4))
         }
         val subtitle = TextView(this).apply {
-            text = "Controle as funções do seu Mochi Car"
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 14)
+            text = "Personalize as expressões e funções do painel."
+            textSize = 14f
+            setTextColor(muted)
+        }
+
+        val connectionCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(panel, 20)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
         }
         status = TextView(this).apply {
-            text = BleMochi.statusText
-            textSize = 16f
-            gravity = Gravity.CENTER
-            setPadding(8, 12, 8, 12)
+            textSize = 14f
+            setTextColor(if (BleMochi.connected) cyan else muted)
+            typeface = Typeface.DEFAULT_BOLD
         }
-        connectButton = Button(this).apply {
-            text = if (BleMochi.connected) "CONECTADO" else "CONECTAR AO MOCHI"
+        connectButton = TextView(this).apply {
+            text = "CONECTAR AO MOCHI"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(bg)
+            background = rounded(cyan, 12)
+            setPadding(dp(16), dp(13), dp(16), dp(13))
             setOnClickListener { requestPermissionsThenScan() }
         }
+        connectionCard.addView(status)
+        connectionCard.addView(connectButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+
         controls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
 
+        content.addView(brand)
         content.addView(title)
-        content.addView(subtitle)
-        content.addView(status)
-        content.addView(connectButton)
-        addSection(controls, "TELAS DO MOCHI")
-        addButton(controls, "Menu", "SCREEN:MENU")
-        addButton(controls, "Início", "SCREEN:HOME")
-        addButton(controls, "Música", "SCREEN:MUSIC")
-        addButton(controls, "Animações", "SCREEN:ANIMATIONS")
-        addButton(controls, "Trip", "SCREEN:TRIP")
-
-        addSection(controls, "PERSONALIDADES")
-        addButton(controls, "Normal", "MODE:NORMAL")
-        addButton(controls, "Fofo", "MODE:CUTE")
-        addButton(controls, "Engraçado", "MODE:FUNNY")
-        addButton(controls, "Rabugento", "MODE:GRUMPY")
-        addButton(controls, "Sono", "MODE:SLEEP")
-        addButton(controls, "Automático", "MODE:AUTO")
-
-        addSection(controls, "ANIMAÇÕES")
-        addButton(controls, "Próxima expressão", "SCENE:NEXT")
-        addButton(controls, "Feliz", "SCENE:HAPPY")
-        addButton(controls, "Surpreso", "SCENE:SURPRISED")
-        addButton(controls, "Sonolento", "SCENE:SLEEPY")
-        addButton(controls, "Rindo", "SCENE:LAUGHING")
-        addButton(controls, "Curioso", "SCENE:CURIOUS")
-
-        addSection(controls, "MÚSICA")
-        addButton(controls, "Trocar visual da música", "MUSIC:NEXT")
-
-        addSection(controls, "TRIP")
-        addButton(controls, "Iniciar / Pausar Trip", "TRIP:TOGGLE")
-        addButton(controls, "Zerar Trip", "TRIP:RESET")
-
-        val note = TextView(this).apply {
-            text = "Use os controles com o veículo estacionado ou por um passageiro."
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setPadding(8, 18, 8, 20)
-        }
-        controls.addView(note)
+        content.addView(subtitle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
+        content.addView(connectionCard)
         content.addView(controls)
+
+        addSection("ATALHOS", "Acesse rapidamente as telas")
+        addGrid(
+            listOf(
+                Tile("⌂", "Início", "SCREEN:HOME", cyan),
+                Tile("☷", "Menu", "SCREEN:MENU", purple),
+                Tile("♫", "Música", "SCREEN:MUSIC", purple),
+                Tile("✦", "Animações", "SCREEN:ANIMATIONS", cyan),
+                Tile("◷", "Trip", "SCREEN:TRIP", cyan)
+            )
+        )
+
+        addSection("PERSONALIDADE", "Escolha o jeito do Mochi")
+        addGrid(
+            listOf(
+                Tile("●", "Normal", "MODE:NORMAL", cyan),
+                Tile("♡", "Fofo", "MODE:CUTE", purple),
+                Tile("笑", "Engraçado", "MODE:FUNNY", purple),
+                Tile("☹", "Rabugento", "MODE:GRUMPY", cyan),
+                Tile("☾", "Sono", "MODE:SLEEP", purple),
+                Tile("⟳", "Automático", "MODE:AUTO", cyan)
+            )
+        )
+
+        addSection("EXPRESSÕES", "Mude a carinha do Mochi")
+        addGrid(
+            listOf(
+                Tile("↻", "Próxima", "SCENE:NEXT", cyan),
+                Tile("☺", "Feliz", "SCENE:HAPPY", purple),
+                Tile("!", "Surpreso", "SCENE:SURPRISED", cyan),
+                Tile("☾", "Sonolento", "SCENE:SLEEPY", purple),
+                Tile("笑", "Rindo", "SCENE:LAUGHING", purple),
+                Tile("⌕", "Curioso", "SCENE:CURIOUS", cyan)
+            )
+        )
+
+        addSection("MÚSICA", "Controles do visual musical")
+        addGrid(listOf(Tile("♫", "Trocar visual", "MUSIC:NEXT", purple)))
+
+        addSection("TRIP", "Cronômetro da viagem")
+        addGrid(
+            listOf(
+                Tile("Ⅱ", "Iniciar / Pausar", "TRIP:TOGGLE", cyan),
+                Tile("↺", "Zerar cronômetro", "TRIP:RESET", purple)
+            )
+        )
+
+        val footer = TextView(this).apply {
+            text = "MOCHI CAR  •  CONTROLE BLUETOOTH\nUse os controles com o veículo estacionado ou por um passageiro."
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(muted)
+            setPadding(dp(8), dp(22), dp(8), dp(10))
+        }
+        controls.addView(footer)
+
         scroll.addView(content)
         root.addView(scroll)
         setContentView(root)
-
         updateConnectionUi(BleMochi.statusText)
-        if (BleMochi.connected) controls.visibility = View.VISIBLE
     }
 
-    private fun addSection(parent: LinearLayout, name: String) {
-        parent.addView(TextView(this).apply {
-            text = name
-            textSize = 18f
+    private data class Tile(val icon: String, val label: String, val command: String, val accent: Int)
+
+    private fun addSection(title: String, caption: String) {
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(22), 0, dp(10))
+        }
+        wrap.addView(TextView(this).apply {
+            text = title
+            textSize = 12f
+            letterSpacing = 0.14f
+            setTextColor(cyan)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        wrap.addView(TextView(this).apply {
+            text = caption
+            textSize = 13f
+            setTextColor(muted)
+            setPadding(0, dp(3), 0, 0)
+        })
+        controls.addView(wrap)
+    }
+
+    private fun addGrid(items: List<Tile>) {
+        var index = 0
+        while (index < items.size) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            addTile(row, items[index], true)
+            if (index + 1 < items.size) addTile(row, items[index + 1], false)
+            else row.addView(View(this), LinearLayout.LayoutParams(0, dp(94), 1f))
+            controls.addView(row)
+            index += 2
+        }
+    }
+
+    private fun addTile(row: LinearLayout, item: Tile, first: Boolean) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(4, 20, 4, 6)
+            background = rounded(tile, 16)
+            setPadding(dp(13), dp(12), dp(10), dp(12))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { sendCommand(item) }
+        }
+        card.addView(TextView(this).apply {
+            text = item.icon
+            textSize = 23f
+            setTextColor(item.accent)
+            typeface = Typeface.DEFAULT_BOLD
         })
+        card.addView(TextView(this).apply {
+            text = item.label
+            textSize = 14f
+            setTextColor(white)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(5), 0, 0)
+        })
+        val params = LinearLayout.LayoutParams(0, dp(88), 1f)
+        if (first) params.rightMargin = dp(6) else params.leftMargin = dp(6)
+        params.bottomMargin = dp(10)
+        row.addView(card, params)
     }
 
-    private fun addButton(parent: LinearLayout, label: String, command: String) {
-        parent.addView(Button(this).apply {
-            text = label
-            isAllCaps = false
-            setOnClickListener {
-                if (!BleMochi.connected) {
-                    Toast.makeText(this@SetupActivity, "Conecte o Mochi primeiro.", Toast.LENGTH_SHORT).show()
-                } else {
-                    val sent = BleMochi.send(command)
-                    Toast.makeText(
-                        this@SetupActivity,
-                        if (sent) "Comando enviado: $label" else "Não foi possível enviar. Tente reconectar.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        })
+    private fun sendCommand(item: Tile) {
+        if (!BleMochi.connected) {
+            Toast.makeText(this, "Conecte o Mochi primeiro.", Toast.LENGTH_SHORT).show()
+            updateConnectionUi(BleMochi.statusText)
+            return
+        }
+        val sent = BleMochi.send(item.command)
+        Toast.makeText(
+            this,
+            if (sent) "Enviado: ${item.label}" else "Falha ao enviar. Reconecte o Mochi.",
+            Toast.LENGTH_SHORT
+        ).show()
     }
+
+    private fun rounded(color: Int, radius: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+        }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun updateConnectionUi(message: String) {
-        status.text = message
-        val isConnected = BleMochi.connected
-        controls.visibility = if (isConnected) View.VISIBLE else View.GONE
-        connectButton.text = if (isConnected) "CONECTADO AO MOCHI" else "CONECTAR AO MOCHI"
+        status.text = if (BleMochi.connected) "●  CONECTADO AO MOCHI-CAR" else "○  $message"
+        status.setTextColor(if (BleMochi.connected) cyan else muted)
+        controls.visibility = if (BleMochi.connected) View.VISIBLE else View.GONE
+        connectButton.text = if (BleMochi.connected) "CONECTADO  ✓" else "CONECTAR AO MOCHI"
     }
 
     private fun requestPermissionsThenScan() {
@@ -155,11 +268,8 @@ class SetupActivity : Activity() {
         val missing = permissions.filter {
             checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) {
-            requestPermissions(missing.toTypedArray(), permissionRequest)
-        } else {
-            connect()
-        }
+        if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), permissionRequest)
+        else connect()
     }
 
     override fun onRequestPermissionsResult(
