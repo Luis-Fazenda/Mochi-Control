@@ -84,7 +84,19 @@ enum MochiScene {
   SCENE_SURPRISED,
   SCENE_CONFUSED,
   SCENE_LAUGHING,
-  SCENE_BORED
+  SCENE_BORED,
+  SCENE_DEBOCHADO,
+  SCENE_GARGALHADA,
+  SCENE_PISCADINHA,
+  SCENE_CONFIANTE,
+  SCENE_DUVIDANDO,
+  SCENE_IMPRESSIONADO,
+  SCENE_IRRITADO,
+  SCENE_SIMPATICO,
+  SCENE_OLA,
+  SCENE_OBRIGADO,
+  SCENE_FOI_MAL,
+  SCENE_CARINHO
 };
 
 MochiScene currentScene = SCENE_NORMAL;
@@ -92,7 +104,10 @@ MochiScene currentScene = SCENE_NORMAL;
 const char* sceneNames[] = {
   "Normal", "Feliz", "Sonolento", "Rabugento",
   "Curioso", "Empolgado", "Timido", "Surpreso",
-  "Confuso", "Rindo", "Entediado"
+  "Confuso", "Rindo", "Entediado",
+  "Debochado", "Gargalhada", "Piscadinha", "Confiante",
+  "Duvidando", "Impressionado", "Irritado", "Simpatico",
+  "Ola", "Obrigado", "Foi mal", "Carinho"
 };
 
 // ---------------- TELAS ----------------
@@ -495,6 +510,70 @@ void startScene(MochiScene scene) {
       lookingRight = false;
       nextLookTime = millis() + 1500;
       break;
+
+    // Reacoes personalizadas: usam os mesmos olhos RoboEyes originais.
+    case SCENE_DEBOCHADO:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setPosition(E);
+      roboEyes.setWidth(40, 34);
+      roboEyes.anim_laugh();
+      break;
+    case SCENE_GARGALHADA:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setWidth(44, 44);
+      roboEyes.anim_laugh();
+      break;
+    case SCENE_PISCADINHA:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setPosition(DEFAULT);
+      roboEyes.blink(1, 0);
+      break;
+    case SCENE_CONFIANTE:
+      roboEyes.setMood(ANGRY);
+      roboEyes.setPosition(DEFAULT);
+      roboEyes.setHeight(30, 30);
+      break;
+    case SCENE_DUVIDANDO:
+      roboEyes.setMood(DEFAULT);
+      roboEyes.setPosition(E);
+      roboEyes.anim_confused();
+      break;
+    case SCENE_IMPRESSIONADO:
+      roboEyes.setMood(DEFAULT);
+      roboEyes.setWidth(46, 46);
+      roboEyes.setHeight(46, 46);
+      roboEyes.setBorderradius(22, 22);
+      break;
+    case SCENE_IRRITADO:
+      roboEyes.setMood(ANGRY);
+      roboEyes.setPosition(S);
+      break;
+    case SCENE_SIMPATICO:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setPosition(DEFAULT);
+      break;
+    case SCENE_OLA:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setPosition(W);
+      roboEyes.blink(1, 0);
+      nextLookTime = millis() + 500;
+      break;
+    case SCENE_OBRIGADO:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setPosition(S);
+      roboEyes.blink(1, 0);
+      break;
+    case SCENE_FOI_MAL:
+      roboEyes.setMood(TIRED);
+      roboEyes.setPosition(S);
+      roboEyes.blink(1, 0);
+      break;
+    case SCENE_CARINHO:
+      roboEyes.setMood(HAPPY);
+      roboEyes.setWidth(42, 42);
+      roboEyes.setHeight(34, 34);
+      roboEyes.setBorderradius(17, 17);
+      break;
   }
 
   scheduleNextScene();
@@ -838,6 +917,18 @@ void processPendingBleCommand() {
   else if (!strcmp(command, "SCENE:SLEEPY"))     startScene(SCENE_SLEEPY);
   else if (!strcmp(command, "SCENE:LAUGHING"))   startScene(SCENE_LAUGHING);
   else if (!strcmp(command, "SCENE:CURIOUS"))    startScene(SCENE_CURIOUS);
+  else if (!strcmp(command, "SCENE:DEBOCHADO")) startScene(SCENE_DEBOCHADO);
+  else if (!strcmp(command, "SCENE:GARGALHADA")) startScene(SCENE_GARGALHADA);
+  else if (!strcmp(command, "SCENE:PISCADINHA")) startScene(SCENE_PISCADINHA);
+  else if (!strcmp(command, "SCENE:CONFIANTE")) startScene(SCENE_CONFIANTE);
+  else if (!strcmp(command, "SCENE:DUVIDANDO")) startScene(SCENE_DUVIDANDO);
+  else if (!strcmp(command, "SCENE:IMPRESSIONADO")) startScene(SCENE_IMPRESSIONADO);
+  else if (!strcmp(command, "SCENE:IRRITADO")) startScene(SCENE_IRRITADO);
+  else if (!strcmp(command, "SCENE:SIMPATICO")) startScene(SCENE_SIMPATICO);
+  else if (!strcmp(command, "SCENE:OLA")) startScene(SCENE_OLA);
+  else if (!strcmp(command, "SCENE:OBRIGADO")) startScene(SCENE_OBRIGADO);
+  else if (!strcmp(command, "SCENE:FOI_MAL")) startScene(SCENE_FOI_MAL);
+  else if (!strcmp(command, "SCENE:CARINHO")) startScene(SCENE_CARINHO);
   else if (!strcmp(command, "MUSIC:NEXT"))       musicStyle = (musicStyle + 1) % 3;
   else if (!strcmp(command, "TRIP:TOGGLE"))      toggleTrip();
   else if (!strcmp(command, "TRIP:RESET"))       resetTrip();
