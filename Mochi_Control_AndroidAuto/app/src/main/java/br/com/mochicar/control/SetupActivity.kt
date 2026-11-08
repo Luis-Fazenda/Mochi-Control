@@ -124,15 +124,21 @@ class SetupActivity : Activity() {
             )
         )
 
-        addSection("EXPRESSÕES ORIGINAIS", "As carinhas clássicas do Mochi")
+        addSection("EXPRESSÕES ORIGINAIS", "As 11 carinhas clássicas do Mochi")
         addGrid(
             listOf(
                 Tile("↻", "Próxima", "SCENE:NEXT", cyan),
+                Tile("○", "Normal", "SCENE:NORMAL", cyan),
                 Tile("☺", "Feliz", "SCENE:HAPPY", purple),
-                Tile("!", "Surpreso", "SCENE:SURPRISED", cyan),
                 Tile("☾", "Sonolento", "SCENE:SLEEPY", purple),
-                Tile("笑", "Rindo", "SCENE:LAUGHING", purple),
-                Tile("⌕", "Curioso", "SCENE:CURIOUS", cyan)
+                Tile("☹", "Rabugento", "SCENE:GRUMPY", cyan),
+                Tile("⌕", "Curioso", "SCENE:CURIOUS", purple),
+                Tile("★", "Empolgado", "SCENE:EXCITED", cyan),
+                Tile("♡", "Tímido", "SCENE:SHY", purple),
+                Tile("!", "Surpreso", "SCENE:SURPRISED", cyan),
+                Tile("?", "Confuso", "SCENE:CONFUSED", purple),
+                Tile("笑", "Rindo", "SCENE:LAUGHING", cyan),
+                Tile("…", "Entediado", "SCENE:BORED", purple)
             )
         )
 
