@@ -912,7 +912,13 @@ void processPendingBleCommand() {
   else if (!strcmp(command, "MODE:SLEEP"))       currentMode = MODE_SLEEP;
   else if (!strcmp(command, "MODE:AUTO"))        currentMode = MODE_AUTOMATIC;
   else if (!strcmp(command, "SCENE:NEXT"))       startScene(chooseSceneForMode());
+  else if (!strcmp(command, "SCENE:NORMAL"))     startScene(SCENE_NORMAL);
   else if (!strcmp(command, "SCENE:HAPPY"))      startScene(SCENE_HAPPY);
+  else if (!strcmp(command, "SCENE:GRUMPY"))     startScene(SCENE_GRUMPY);
+  else if (!strcmp(command, "SCENE:EXCITED"))    startScene(SCENE_EXCITED);
+  else if (!strcmp(command, "SCENE:SHY"))        startScene(SCENE_SHY);
+  else if (!strcmp(command, "SCENE:CONFUSED"))   startScene(SCENE_CONFUSED);
+  else if (!strcmp(command, "SCENE:BORED"))      startScene(SCENE_BORED);
   else if (!strcmp(command, "SCENE:SURPRISED"))  startScene(SCENE_SURPRISED);
   else if (!strcmp(command, "SCENE:SLEEPY"))     startScene(SCENE_SLEEPY);
   else if (!strcmp(command, "SCENE:LAUGHING"))   startScene(SCENE_LAUGHING);
