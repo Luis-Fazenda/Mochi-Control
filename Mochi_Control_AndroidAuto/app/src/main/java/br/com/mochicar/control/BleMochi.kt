@@ -16,6 +16,8 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import java.util.UUID
@@ -66,28 +68,48 @@ object BleMochi {
             onUpdate("Bluetooth LE indisponível.")
             return
         }
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(UUID.fromString(SERVICE_UUID)))
-            .build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
+        // Busca sem filtro de UUID: alguns aparelhos não entregam o UUID
+        // no pacote inicial do anúncio BLE, embora o serviço exista.
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
+                val advertisedName = result.scanRecord?.deviceName ?: result.device.name
+                val advertisedServices = result.scanRecord?.serviceUuids.orEmpty()
+                val hasMochiService = advertisedServices.any {
+                    it.uuid == UUID.fromString(SERVICE_UUID)
+                }
+                val isMochiName = advertisedName == "Mochi-Car"
+
+                if (!isMochiName && !hasMochiService) return
+
                 scanner.stopScan(this)
                 scanCallback = null
-                statusText = "Conectando ao Mochi-Car..."
+                statusText = "Mochi encontrado; conectando..."
                 onUpdate(statusText)
                 connect(context.applicationContext, result.device, onUpdate)
             }
 
             override fun onScanFailed(errorCode: Int) {
+                scanCallback = null
                 statusText = "Falha na busca BLE: $errorCode"
                 onUpdate(statusText)
             }
         }
-        scanner.startScan(listOf(filter), settings, scanCallback)
+        scanner.startScan(null, settings, scanCallback)
+
+        // Encerra a busca após 20 segundos e mostra uma mensagem útil.
+        Handler(Looper.getMainLooper()).postDelayed({
+            val active = scanCallback
+            if (active != null) {
+                try { scanner.stopScan(active) } catch (_: Exception) {}
+                scanCallback = null
+                statusText = "Mochi não encontrado. Confira se o ESP32 está ligado e anuncia Mochi-Car."
+                onUpdate(statusText)
+            }
+        }, 20_000L)
     }
 
     @SuppressLint("MissingPermission")
