@@ -110,3 +110,6 @@ O workflow também inicia automaticamente quando houver um push nas branches `ma
 ## GitHub Actions APK
 
 O workflow `.github/workflows/build-apk.yml` compila o APK de depuração automaticamente quando há alterações nesta pasta ou quando executado manualmente pela aba Actions. O arquivo gerado fica disponível no artifact `Mochi-Control-debug-apk`.
+
+
+CI: configuração do Android SDK atualizada para instalar apenas platform-tools, evitando o pacote legado `tools` que foi removido do repositório do SDK.
