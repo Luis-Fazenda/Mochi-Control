@@ -184,6 +184,8 @@ unsigned long nextSpecialTime = 0;
 unsigned long specialUntil = 0;
 
 bool specialActive = false;
+// Expressao manual fica fixa ate o usuario pedir variacao.
+bool sceneVariationEnabled = true;
 bool lookingRight = true;
 
 bool startupSequence = true;
@@ -655,6 +657,13 @@ void startScene(MochiScene scene) {
   Serial.println(sceneNames[(uint8_t)scene]);
 }
 
+// Selecao explicita pelo usuario: trava a expressao atual.
+void selectSceneManually(MochiScene scene) {
+  sceneVariationEnabled = false;
+  specialActive = false;
+  startScene(scene);
+}
+
 // =====================================================
 // TRANSICAO DE PERSONALIDADE
 // =====================================================
@@ -662,6 +671,7 @@ void startScene(MochiScene scene) {
 void changeMode() {
   if (transitionPending) return;
 
+  sceneVariationEnabled = true;
   currentMode = (MochiMode)(((uint8_t)currentMode + 1) % 6);
 
   specialActive = false;
@@ -690,7 +700,7 @@ void updateTransition() {
 // =====================================================
 
 void startSpecialEvent() {
-  if (specialActive) return;
+  if (!sceneVariationEnabled || specialActive) return;
 
   uint8_t event = random(0, 4);
 
@@ -777,7 +787,7 @@ void updateHomeAnimations() {
 
   updateSceneMotion();
 
-  if ((long)(millis() - nextSceneTime) >= 0) {
+  if (sceneVariationEnabled && (long)(millis() - nextSceneTime) >= 0) {
     startScene(chooseSceneForMode());
   }
 
@@ -908,7 +918,8 @@ void returnHome() {
   specialActive = false;
   transitionPending = false;
   applyMode();
-  startScene(chooseSceneForMode());
+  if (sceneVariationEnabled) startScene(chooseSceneForMode());
+  else startScene(currentScene);
   scheduleNextSpecial();
 }
 
@@ -921,7 +932,8 @@ void selectMenuItem() {
     case 1:
       currentScreen = SCREEN_ANIMATIONS;
       applyMode();
-      startScene(chooseSceneForMode());
+      if (sceneVariationEnabled) startScene(chooseSceneForMode());
+      else startScene(currentScene);
       break;
 
     case 2:
@@ -984,41 +996,41 @@ void processPendingBleCommand() {
   else if (!strcmp(command, "MODE:GRUMPY"))      currentMode = MODE_GRUMPY;
   else if (!strcmp(command, "MODE:SLEEP"))       currentMode = MODE_SLEEP;
   else if (!strcmp(command, "MODE:AUTO"))        currentMode = MODE_AUTOMATIC;
-  else if (!strcmp(command, "SCENE:NEXT"))       startScene(chooseSceneForMode());
-  else if (!strcmp(command, "SCENE:NORMAL"))     startScene(SCENE_NORMAL);
-  else if (!strcmp(command, "SCENE:HAPPY"))      startScene(SCENE_HAPPY);
-  else if (!strcmp(command, "SCENE:GRUMPY"))     startScene(SCENE_GRUMPY);
-  else if (!strcmp(command, "SCENE:EXCITED"))    startScene(SCENE_EXCITED);
-  else if (!strcmp(command, "SCENE:SHY"))        startScene(SCENE_SHY);
-  else if (!strcmp(command, "SCENE:CONFUSED"))   startScene(SCENE_CONFUSED);
-  else if (!strcmp(command, "SCENE:BORED"))      startScene(SCENE_BORED);
-  else if (!strcmp(command, "SCENE:SURPRISED"))  startScene(SCENE_SURPRISED);
-  else if (!strcmp(command, "SCENE:SLEEPY"))     startScene(SCENE_SLEEPY);
-  else if (!strcmp(command, "SCENE:LAUGHING"))   startScene(SCENE_LAUGHING);
-  else if (!strcmp(command, "SCENE:CURIOUS"))    startScene(SCENE_CURIOUS);
-  else if (!strcmp(command, "SCENE:DEBOCHADO")) startScene(SCENE_DEBOCHADO);
-  else if (!strcmp(command, "SCENE:GARGALHADA")) startScene(SCENE_GARGALHADA);
-  else if (!strcmp(command, "SCENE:PISCADINHA")) startScene(SCENE_PISCADINHA);
-  else if (!strcmp(command, "SCENE:CONFIANTE")) startScene(SCENE_CONFIANTE);
-  else if (!strcmp(command, "SCENE:DUVIDANDO")) startScene(SCENE_DUVIDANDO);
-  else if (!strcmp(command, "SCENE:IMPRESSIONADO")) startScene(SCENE_IMPRESSIONADO);
-  else if (!strcmp(command, "SCENE:IRRITADO")) startScene(SCENE_IRRITADO);
-  else if (!strcmp(command, "SCENE:SIMPATICO")) startScene(SCENE_SIMPATICO);
-  else if (!strcmp(command, "SCENE:OLA")) startScene(SCENE_OLA);
-  else if (!strcmp(command, "SCENE:OBRIGADO")) startScene(SCENE_OBRIGADO);
-  else if (!strcmp(command, "SCENE:FOI_MAL")) startScene(SCENE_FOI_MAL);
-  else if (!strcmp(command, "SCENE:CARINHO")) startScene(SCENE_CARINHO);
-  else if (!strcmp(command, "SCENE:ALERTA")) startScene(SCENE_ALERTA);
-  else if (!strcmp(command, "SCENE:FOCADO")) startScene(SCENE_FOCADO);
-  else if (!strcmp(command, "SCENE:TRISTE")) startScene(SCENE_TRISTE);
-  else if (!strcmp(command, "SCENE:ASSUSTADO")) startScene(SCENE_ASSUSTADO);
-  else if (!strcmp(command, "SCENE:DESESPERADO")) startScene(SCENE_DESESPERADO);
-  else if (!strcmp(command, "SCENE:DESORIENTADO")) startScene(SCENE_DESORIENTADO);
-  else if (!strcmp(command, "SCENE:PREOCUPADO")) startScene(SCENE_PREOCUPADO);
-  else if (!strcmp(command, "SCENE:OLHAR_ESQUERDA")) startScene(SCENE_OLHAR_ESQUERDA);
-  else if (!strcmp(command, "SCENE:OLHAR_DIREITA")) startScene(SCENE_OLHAR_DIREITA);
-  else if (!strcmp(command, "SCENE:OLHAR_CIMA")) startScene(SCENE_OLHAR_CIMA);
-  else if (!strcmp(command, "SCENE:OLHAR_BAIXO")) startScene(SCENE_OLHAR_BAIXO);
+  else if (!strcmp(command, "SCENE:NEXT")) { sceneVariationEnabled = true; startScene(chooseSceneForMode()); scheduleNextScene(); }
+  else if (!strcmp(command, "SCENE:NORMAL"))     selectSceneManually(SCENE_NORMAL);
+  else if (!strcmp(command, "SCENE:HAPPY"))      selectSceneManually(SCENE_HAPPY);
+  else if (!strcmp(command, "SCENE:GRUMPY"))     selectSceneManually(SCENE_GRUMPY);
+  else if (!strcmp(command, "SCENE:EXCITED"))    selectSceneManually(SCENE_EXCITED);
+  else if (!strcmp(command, "SCENE:SHY"))        selectSceneManually(SCENE_SHY);
+  else if (!strcmp(command, "SCENE:CONFUSED"))   selectSceneManually(SCENE_CONFUSED);
+  else if (!strcmp(command, "SCENE:BORED"))      selectSceneManually(SCENE_BORED);
+  else if (!strcmp(command, "SCENE:SURPRISED"))  selectSceneManually(SCENE_SURPRISED);
+  else if (!strcmp(command, "SCENE:SLEEPY"))     selectSceneManually(SCENE_SLEEPY);
+  else if (!strcmp(command, "SCENE:LAUGHING"))   selectSceneManually(SCENE_LAUGHING);
+  else if (!strcmp(command, "SCENE:CURIOUS"))    selectSceneManually(SCENE_CURIOUS);
+  else if (!strcmp(command, "SCENE:DEBOCHADO")) selectSceneManually(SCENE_DEBOCHADO);
+  else if (!strcmp(command, "SCENE:GARGALHADA")) selectSceneManually(SCENE_GARGALHADA);
+  else if (!strcmp(command, "SCENE:PISCADINHA")) selectSceneManually(SCENE_PISCADINHA);
+  else if (!strcmp(command, "SCENE:CONFIANTE")) selectSceneManually(SCENE_CONFIANTE);
+  else if (!strcmp(command, "SCENE:DUVIDANDO")) selectSceneManually(SCENE_DUVIDANDO);
+  else if (!strcmp(command, "SCENE:IMPRESSIONADO")) selectSceneManually(SCENE_IMPRESSIONADO);
+  else if (!strcmp(command, "SCENE:IRRITADO")) selectSceneManually(SCENE_IRRITADO);
+  else if (!strcmp(command, "SCENE:SIMPATICO")) selectSceneManually(SCENE_SIMPATICO);
+  else if (!strcmp(command, "SCENE:OLA")) selectSceneManually(SCENE_OLA);
+  else if (!strcmp(command, "SCENE:OBRIGADO")) selectSceneManually(SCENE_OBRIGADO);
+  else if (!strcmp(command, "SCENE:FOI_MAL")) selectSceneManually(SCENE_FOI_MAL);
+  else if (!strcmp(command, "SCENE:CARINHO")) selectSceneManually(SCENE_CARINHO);
+  else if (!strcmp(command, "SCENE:ALERTA")) selectSceneManually(SCENE_ALERTA);
+  else if (!strcmp(command, "SCENE:FOCADO")) selectSceneManually(SCENE_FOCADO);
+  else if (!strcmp(command, "SCENE:TRISTE")) selectSceneManually(SCENE_TRISTE);
+  else if (!strcmp(command, "SCENE:ASSUSTADO")) selectSceneManually(SCENE_ASSUSTADO);
+  else if (!strcmp(command, "SCENE:DESESPERADO")) selectSceneManually(SCENE_DESESPERADO);
+  else if (!strcmp(command, "SCENE:DESORIENTADO")) selectSceneManually(SCENE_DESORIENTADO);
+  else if (!strcmp(command, "SCENE:PREOCUPADO")) selectSceneManually(SCENE_PREOCUPADO);
+  else if (!strcmp(command, "SCENE:OLHAR_ESQUERDA")) selectSceneManually(SCENE_OLHAR_ESQUERDA);
+  else if (!strcmp(command, "SCENE:OLHAR_DIREITA")) selectSceneManually(SCENE_OLHAR_DIREITA);
+  else if (!strcmp(command, "SCENE:OLHAR_CIMA")) selectSceneManually(SCENE_OLHAR_CIMA);
+  else if (!strcmp(command, "SCENE:OLHAR_BAIXO")) selectSceneManually(SCENE_OLHAR_BAIXO);
   else if (!strcmp(command, "MUSIC:NEXT"))       musicStyle = (musicStyle + 1) % 3;
   else if (!strcmp(command, "TRIP:TOGGLE"))      toggleTrip();
   else if (!strcmp(command, "TRIP:RESET"))       resetTrip();
@@ -1029,6 +1041,7 @@ void processPendingBleCommand() {
   else if (!strcmp(command, "SCREEN:TRIP"))      setScreenRemote(SCREEN_TRIP);
 
   if (!strncmp(command, "MODE:", 5)) {
+    sceneVariationEnabled = true;
     applyMode();
     startScene(chooseSceneForMode());
   }
@@ -1164,7 +1177,8 @@ void setScreenRemote(ScreenState target) {
     specialActive = false;
     transitionPending = false;
     applyMode();
-    startScene(chooseSceneForMode());
+    if (sceneVariationEnabled) startScene(chooseSceneForMode());
+    else startScene(currentScene);
     scheduleNextSpecial();
   }
 }
@@ -1243,7 +1257,7 @@ void loop() {
       if (!specialActive && !transitionPending) {
         updateSceneMotion();
 
-        if ((long)(millis() - nextSceneTime) >= 0) {
+        if (sceneVariationEnabled && (long)(millis() - nextSceneTime) >= 0) {
           startScene(chooseSceneForMode());
         }
 
