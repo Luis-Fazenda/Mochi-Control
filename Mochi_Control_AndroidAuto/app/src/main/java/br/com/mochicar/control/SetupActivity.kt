@@ -12,6 +12,8 @@ import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 
@@ -19,6 +21,9 @@ class SetupActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var connectButton: TextView
     private lateinit var controls: LinearLayout
+    private lateinit var favoritesContainer: LinearLayout
+    private val allTiles = mutableListOf<Tile>()
+    private val prefs by lazy { getSharedPreferences("mochi_editor_v52", MODE_PRIVATE) }
     private val permissionRequest = 77
 
     private val bg = Color.rgb(10, 14, 28)
@@ -94,12 +99,19 @@ class SetupActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
+        favoritesContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         content.addView(brand)
         content.addView(title)
         content.addView(subtitle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
         content.addView(connectionCard)
         content.addView(controls)
+
+        addSection("MINHAS FAVORITAS", "Segure uma carinha por 1 segundo para adicioná-la aqui")
+        controls.addView(favoritesContainer)
+
+        addSection("EDITOR DE EXPRESSÕES", "Combine formato dos olhos, emoção e efeito")
+        addExpressionEditor()
 
         addSection("ATALHOS", "Acesse rapidamente as telas")
         addGrid(
@@ -188,6 +200,8 @@ class SetupActivity : Activity() {
             )
         )
 
+        refreshFavorites()
+
         val footer = TextView(this).apply {
             text = "MOCHI CAR  •  CONTROLE BLUETOOTH\nUse os controles com o veículo estacionado ou por um passageiro."
             textSize = 11f
@@ -227,6 +241,7 @@ class SetupActivity : Activity() {
     }
 
     private fun addGrid(items: List<Tile>) {
+        allTiles.addAll(items)
         var index = 0
         while (index < items.size) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -247,6 +262,10 @@ class SetupActivity : Activity() {
             isClickable = true
             isFocusable = true
             setOnClickListener { sendCommand(item) }
+            setOnLongClickListener {
+                toggleFavorite(item)
+                true
+            }
         }
         card.addView(TextView(this).apply {
             text = item.icon
@@ -267,16 +286,119 @@ class SetupActivity : Activity() {
         row.addView(card, params)
     }
 
-    private fun sendCommand(item: Tile) {
+    private fun favoriteCommands(): MutableSet<String> =
+        prefs.getStringSet("favorite_commands", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+    private fun toggleFavorite(item: Tile) {
+        val favorites = favoriteCommands()
+        val added = if (favorites.contains(item.command)) {
+            favorites.remove(item.command)
+            false
+        } else {
+            favorites.add(item.command)
+            true
+        }
+        prefs.edit().putStringSet("favorite_commands", favorites).apply()
+        refreshFavorites()
+        Toast.makeText(this, if (added) "${item.label} adicionada às favoritas" else "${item.label} removida das favoritas", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun refreshFavorites() {
+        if (!::favoritesContainer.isInitialized) return
+        favoritesContainer.removeAllViews()
+        val favorites = favoriteCommands()
+        val selected = allTiles.filter { favorites.contains(it.command) }
+        if (selected.isEmpty()) {
+            favoritesContainer.addView(TextView(this).apply {
+                text = "Nenhuma favorita ainda. Segure uma carinha para salvá-la."
+                textSize = 12f
+                setTextColor(muted)
+                setPadding(0, dp(4), 0, dp(8))
+            })
+            return
+        }
+        var index = 0
+        while (index < selected.size) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            addTile(row, selected[index], true)
+            if (index + 1 < selected.size) addTile(row, selected[index + 1], false)
+            else row.addView(View(this), LinearLayout.LayoutParams(0, dp(94), 1f))
+            favoritesContainer.addView(row)
+            index += 2
+        }
+    }
+
+    private fun addExpressionEditor() {
+        val editor = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(panel, 18)
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        fun selector(label: String, options: List<String>): Spinner {
+            editor.addView(TextView(this).apply {
+                text = label
+                textSize = 12f
+                setTextColor(muted)
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, dp(7), 0, dp(4))
+            })
+            val spinner = Spinner(this)
+            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
+            editor.addView(spinner, LinearLayout.LayoutParams(-1, dp(48)))
+            return spinner
+        }
+        val eyes = selector("FORMATO DOS OLHOS", listOf("Redondos", "Estreitos", "Quadrados"))
+        val emotion = selector("EXPRESSÃO", listOf("Feliz", "Triste", "Bravo", "Surpreso", "Sonolento"))
+        val effect = selector("EFEITO", listOf("Nenhum", "Bochechas", "Brilhos", "Coração"))
+        val preview = TextView(this).apply {
+            text = "Prévia: olhos redondos • feliz • sem efeito"
+            textSize = 12f
+            setTextColor(cyan)
+            setPadding(0, dp(12), 0, dp(10))
+        }
+        fun updatePreview() {
+            preview.text = "Prévia: ${eyes.selectedItem} • ${emotion.selectedItem} • ${effect.selectedItem}"
+        }
+        val listener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) = updatePreview()
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+        eyes.onItemSelectedListener = listener
+        emotion.onItemSelectedListener = listener
+        effect.onItemSelectedListener = listener
+        editor.addView(preview)
+        editor.addView(TextView(this).apply {
+            text = "APLICAR NO MOCHI"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(bg)
+            background = rounded(cyan, 12)
+            setPadding(dp(12), dp(14), dp(12), dp(14))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                val eyeCode = listOf("r", "s", "q")[eyes.selectedItemPosition]
+                val emotionCode = listOf("h", "s", "a", "u", "d")[emotion.selectedItemPosition]
+                val effectCode = listOf("n", "b", "p", "c")[effect.selectedItemPosition]
+                sendCommand("CUSTOM:$eyeCode,$emotionCode,$effectCode", "Expressão personalizada")
+            }
+        }, LinearLayout.LayoutParams(-1, -2))
+        controls.addView(editor)
+    }
+
+    private fun sendCommand(item: Tile) = sendCommand(item.command, item.label)
+
+    private fun sendCommand(command: String, label: String) {
         if (!BleMochi.connected) {
             Toast.makeText(this, "Conecte o Mochi primeiro.", Toast.LENGTH_SHORT).show()
             updateConnectionUi(BleMochi.statusText)
             return
         }
-        val sent = BleMochi.send(item.command)
+        val sent = BleMochi.send(command)
         Toast.makeText(
             this,
-            if (sent) "Enviado: ${item.label}" else "Falha ao enviar. Reconecte o Mochi.",
+            if (sent) "Enviado: $label" else "Falha ao enviar. Reconecte o Mochi.",
             Toast.LENGTH_SHORT
         ).show()
     }
