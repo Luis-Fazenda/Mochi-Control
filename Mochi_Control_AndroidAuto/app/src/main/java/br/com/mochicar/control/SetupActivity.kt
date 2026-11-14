@@ -7,6 +7,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -19,6 +21,14 @@ class SetupActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var connectButton: TextView
     private lateinit var controls: LinearLayout
+    private lateinit var deviceStatus: TextView
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val statusRefresh = object : Runnable {
+        override fun run() {
+            if (::deviceStatus.isInitialized) deviceStatus.text = formatDeviceStatus(BleMochi.latestStatus)
+            statusHandler.postDelayed(this, 1000L)
+        }
+    }
     private val permissionRequest = 77
 
     private val bg = Color.rgb(10, 14, 28)
@@ -94,6 +104,16 @@ class SetupActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
+        deviceStatus = TextView(this).apply {
+            text = "Aguardando informações do Mochi..."
+            textSize = 13f
+            setTextColor(white)
+            background = rounded(tile, 14)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+        controls.addView(deviceStatus, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(16)
+        })
 
         content.addView(brand)
         content.addView(title)
@@ -294,6 +314,41 @@ class SetupActivity : Activity() {
         status.setTextColor(if (BleMochi.connected) cyan else muted)
         controls.visibility = if (BleMochi.connected) View.VISIBLE else View.GONE
         connectButton.text = if (BleMochi.connected) "CONECTADO  ✓" else "CONECTAR AO MOCHI"
+        if (!BleMochi.connected && ::deviceStatus.isInitialized) {
+            deviceStatus.text = "Sem telemetria. Conecte o Mochi para ver o estado em tempo real."
+        }
+    }
+
+    private fun formatDeviceStatus(raw: String): String {
+        if (raw.isBlank()) return "Conectado. Aguardando o primeiro estado do ESP32..."
+        val values = raw.split(";").mapNotNull { part ->
+            val pair = part.split("=", limit = 2)
+            if (pair.size == 2) pair[0] to pair[1] else null
+        }.toMap()
+        val modes = listOf("Normal", "Fofo", "Engraçado", "Rabugento", "Sono", "Automático")
+        val scenes = listOf(
+            "Normal", "Feliz", "Sonolento", "Rabugento", "Curioso", "Empolgado",
+            "Tímido", "Surpreso", "Confuso", "Rindo", "Entediado", "Debochado",
+            "Gargalhada", "Piscadinha", "Confiante", "Duvidando", "Impressionado",
+            "Irritado", "Simpático", "Olá", "Obrigado", "Foi mal", "Carinho",
+            "Alerta", "Focado", "Triste", "Assustado", "Desesperado", "Desorientado",
+            "Preocupado", "Olhar esquerda", "Olhar direita", "Olhar cima", "Olhar baixo"
+        )
+        val screens = listOf("Início", "Menu", "Música", "Animações", "Trip")
+        val music = listOf("Wave", "Pulse", "Random")
+        val mode = values["MODE"]?.let { modes.getOrNull(
+            when (it) { "NORMAL" -> 0; "CUTE" -> 1; "FUNNY" -> 2; "GRUMPY" -> 3; "SLEEP" -> 4; "AUTOMATIC" -> 5; else -> -1 }
+        ) } ?: "—"
+        val scene = values["SCENE"]?.toIntOrNull()?.let { scenes.getOrNull(it) } ?: "—"
+        val tripMs = values["TRIP_MS"]?.toLongOrNull() ?: 0L
+        val totalSeconds = tripMs / 1000L
+        val tripTime = "%02d:%02d:%02d".format(
+            totalSeconds / 3600L, (totalSeconds % 3600L) / 60L, totalSeconds % 60L
+        )
+        val tripState = if (values["TRIP_RUNNING"] == "1") "Rodando" else "Pausado"
+        val screen = values["SCREEN"]?.toIntOrNull()?.let { screens.getOrNull(it) } ?: "—"
+        val musicName = values["MUSIC"]?.toIntOrNull()?.let { music.getOrNull(it) } ?: "—"
+        return "MOCHI AO VIVO\\nModo: $mode  •  Expressão: $scene\\nTela: $screen  •  Música: $musicName\\nTrip: $tripTime ($tripState)"
     }
 
     private fun requestPermissionsThenScan() {
@@ -334,5 +389,12 @@ class SetupActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::status.isInitialized) updateConnectionUi(BleMochi.statusText)
+        statusHandler.removeCallbacks(statusRefresh)
+        statusHandler.post(statusRefresh)
+    }
+
+    override fun onPause() {
+        statusHandler.removeCallbacks(statusRefresh)
+        super.onPause()
     }
 }
