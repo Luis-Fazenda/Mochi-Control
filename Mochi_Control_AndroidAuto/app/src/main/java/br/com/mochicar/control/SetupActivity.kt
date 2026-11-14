@@ -319,6 +319,7 @@ class SetupActivity : Activity() {
         }
     }
 
+    // V6: exibe a telemetria que o firmware já publica por notificação BLE.
     private fun formatDeviceStatus(raw: String): String {
         if (raw.isBlank()) return "Conectado. Aguardando o primeiro estado do ESP32..."
         val values = raw.split(";").mapNotNull { part ->
