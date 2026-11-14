@@ -337,7 +337,7 @@ class SetupActivity : Activity() {
         val screens = listOf("Início", "Menu", "Música", "Animações", "Trip")
         val music = listOf("Wave", "Pulse", "Random")
         val mode = values["MODE"]?.let { modes.getOrNull(
-            when (it) { "NORMAL" -> 0; "CUTE" -> 1; "FUNNY" -> 2; "GRUMPY" -> 3; "SLEEP" -> 4; "AUTOMATIC" -> 5; else -> -1 }
+            when (it) { "NORMAL" -> 0; "FOFO" -> 1; "ENGRACADO" -> 2; "RABUGENTO" -> 3; "SONO" -> 4; "AUTOMATICO" -> 5; else -> -1 }
         ) } ?: "—"
         val scene = values["SCENE"]?.toIntOrNull()?.let { scenes.getOrNull(it) } ?: "—"
         val tripMs = values["TRIP_MS"]?.toLongOrNull() ?: 0L
