@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - main
+      - mochi-car-v6-dev
+    paths:
+      - 'Mochi_Control_AndroidAuto/**'
+      - '.github/workflows/build-apk.yml'
+  pull_request:
+    branches:
+      - main
     paths:
       - 'Mochi_Control_AndroidAuto/**'
       - '.github/workflows/build-apk.yml'

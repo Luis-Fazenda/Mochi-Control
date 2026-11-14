@@ -7,6 +7,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -19,6 +21,21 @@ class SetupActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var connectButton: TextView
     private lateinit var controls: LinearLayout
+    private lateinit var deviceStatus: TextView
+    private lateinit var tripSummary: TextView
+    private lateinit var musicSummary: TextView
+    private lateinit var historySummary: TextView
+    private var lastTripMs: Long? = null
+    private var lastTripRunning: Boolean? = null
+    private val dashboardPrefs by lazy { getSharedPreferences("mochi_v6_dashboard", MODE_PRIVATE) }
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val statusRefresh = object : Runnable {
+        override fun run() {
+            if (::deviceStatus.isInitialized) deviceStatus.text = formatDeviceStatus(BleMochi.latestStatus)
+            updateDashboard(BleMochi.latestStatus)
+            statusHandler.postDelayed(this, 1000L)
+        }
+    }
     private val permissionRequest = 77
 
     private val bg = Color.rgb(10, 14, 28)
@@ -94,6 +111,63 @@ class SetupActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
+        deviceStatus = TextView(this).apply {
+            text = "Aguardando informações do Mochi..."
+            textSize = 13f
+            setTextColor(white)
+            background = rounded(tile, 14)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+        controls.addView(deviceStatus, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(16)
+        })
+
+        addSection("PAINEL V6", "Resumo rápido e controles principais")
+        val tripCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(panel, 18)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        tripSummary = TextView(this).apply {
+            text = "TRIP\\nAguardando dados do ESP32..."
+            textSize = 17f
+            setTextColor(white)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        historySummary = TextView(this).apply {
+            text = "Viagens finalizadas nesta instalação: 0"
+            textSize = 12f
+            setTextColor(muted)
+            setPadding(0, dp(7), 0, dp(10))
+        }
+        val tripActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tripActions.addView(actionButton("INICIAR / PAUSAR", cyan) {
+            sendDashboardCommand("TRIP:TOGGLE", "Trip")
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        tripActions.addView(actionButton("ZERAR", purple) {
+            sendDashboardCommand("TRIP:RESET", "Trip zerado")
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
+        tripCard.addView(tripSummary)
+        tripCard.addView(historySummary)
+        tripCard.addView(tripActions)
+        controls.addView(tripCard)
+
+        val musicCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(panel, 18)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        musicSummary = TextView(this).apply {
+            text = "VISUAL MUSICAL\\nAguardando estado..."
+            textSize = 16f
+            setTextColor(white)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        musicCard.addView(musicSummary)
+        musicCard.addView(actionButton("PRÓXIMO VISUAL", cyan) {
+            sendDashboardCommand("MUSIC:NEXT", "Visual musical alterado")
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        controls.addView(musicCard)
 
         content.addView(brand)
         content.addView(title)
@@ -267,6 +341,78 @@ class SetupActivity : Activity() {
         row.addView(card, params)
     }
 
+    private fun actionButton(label: String, accent: Int, action: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            textSize = 12f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(bg)
+            background = rounded(accent, 11)
+            setPadding(dp(10), dp(13), dp(10), dp(13))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+        }
+
+    private fun sendDashboardCommand(command: String, label: String) {
+        if (!BleMochi.connected) {
+            Toast.makeText(this, "Conecte o Mochi primeiro.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sent = BleMochi.send(command)
+        Toast.makeText(
+            this,
+            if (sent) "$label: comando enviado" else "Falha ao enviar. Reconecte o Mochi.",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun updateDashboard(raw: String) {
+        if (raw.isBlank()) return
+        val values = raw.split(";").mapNotNull { part ->
+            val pair = part.split("=", limit = 2)
+            if (pair.size == 2) pair[0] to pair[1] else null
+        }.toMap()
+        val tripMs = values["TRIP_MS"]?.toLongOrNull() ?: return
+        val running = values["TRIP_RUNNING"] == "1"
+        val totalSeconds = tripMs / 1000L
+        val formatted = "%02d:%02d:%02d".format(
+            totalSeconds / 3600L, (totalSeconds % 3600L) / 60L, totalSeconds % 60L
+        )
+        if (lastTripMs != null && tripMs < (lastTripMs ?: tripMs) && (lastTripMs ?: 0L) > 0L) {
+            val previous = lastTripMs ?: 0L
+            val count = dashboardPrefs.getInt("completed_trips", 0) + 1
+            dashboardPrefs.edit()
+                .putInt("completed_trips", count)
+                .putLong("last_completed_trip_ms", previous)
+                .apply()
+        }
+        lastTripMs = tripMs
+        lastTripRunning = running
+        if (::tripSummary.isInitialized) {
+            tripSummary.text = "TRIP\\n$formatted\\n" +
+                if (running) "Cronômetro em andamento" else "Cronômetro pausado"
+        }
+        if (::historySummary.isInitialized) {
+            val count = dashboardPrefs.getInt("completed_trips", 0)
+            val previous = dashboardPrefs.getLong("last_completed_trip_ms", 0L) / 1000L
+            val previousText = if (previous > 0L) {
+                val h = previous / 3600L
+                val m = (previous % 3600L) / 60L
+                val s = previous % 60L
+                " • Última: %02d:%02d:%02d".format(h, m, s)
+            } else ""
+            historySummary.text = "Viagens encerradas por reset: $count$previousText"
+        }
+        val musicNames = listOf("WAVE", "PULSE", "RANDOM")
+        val musicIndex = values["MUSIC"]?.toIntOrNull()
+        if (::musicSummary.isInitialized) {
+            val name = musicIndex?.let { musicNames.getOrNull(it) } ?: "—"
+            musicSummary.text = "VISUAL MUSICAL\\n$name\\nToque para avançar entre os visuais existentes."
+        }
+    }
+
     private fun sendCommand(item: Tile) {
         if (!BleMochi.connected) {
             Toast.makeText(this, "Conecte o Mochi primeiro.", Toast.LENGTH_SHORT).show()
@@ -294,6 +440,42 @@ class SetupActivity : Activity() {
         status.setTextColor(if (BleMochi.connected) cyan else muted)
         controls.visibility = if (BleMochi.connected) View.VISIBLE else View.GONE
         connectButton.text = if (BleMochi.connected) "CONECTADO  ✓" else "CONECTAR AO MOCHI"
+        if (!BleMochi.connected && ::deviceStatus.isInitialized) {
+            deviceStatus.text = "Sem telemetria. Conecte o Mochi para ver o estado em tempo real."
+        }
+    }
+
+    // V6: exibe a telemetria que o firmware já publica por notificação BLE.
+    private fun formatDeviceStatus(raw: String): String {
+        if (raw.isBlank()) return "Conectado. Aguardando o primeiro estado do ESP32..."
+        val values = raw.split(";").mapNotNull { part ->
+            val pair = part.split("=", limit = 2)
+            if (pair.size == 2) pair[0] to pair[1] else null
+        }.toMap()
+        val modes = listOf("Normal", "Fofo", "Engraçado", "Rabugento", "Sono", "Automático")
+        val scenes = listOf(
+            "Normal", "Feliz", "Sonolento", "Rabugento", "Curioso", "Empolgado",
+            "Tímido", "Surpreso", "Confuso", "Rindo", "Entediado", "Debochado",
+            "Gargalhada", "Piscadinha", "Confiante", "Duvidando", "Impressionado",
+            "Irritado", "Simpático", "Olá", "Obrigado", "Foi mal", "Carinho",
+            "Alerta", "Focado", "Triste", "Assustado", "Desesperado", "Desorientado",
+            "Preocupado", "Olhar esquerda", "Olhar direita", "Olhar cima", "Olhar baixo"
+        )
+        val screens = listOf("Início", "Menu", "Música", "Animações", "Trip")
+        val music = listOf("Wave", "Pulse", "Random")
+        val mode = values["MODE"]?.let { modes.getOrNull(
+            when (it) { "NORMAL" -> 0; "FOFO" -> 1; "ENGRACADO" -> 2; "RABUGENTO" -> 3; "SONO" -> 4; "AUTOMATICO" -> 5; else -> -1 }
+        ) } ?: "—"
+        val scene = values["SCENE"]?.toIntOrNull()?.let { scenes.getOrNull(it) } ?: "—"
+        val tripMs = values["TRIP_MS"]?.toLongOrNull() ?: 0L
+        val totalSeconds = tripMs / 1000L
+        val tripTime = "%02d:%02d:%02d".format(
+            totalSeconds / 3600L, (totalSeconds % 3600L) / 60L, totalSeconds % 60L
+        )
+        val tripState = if (values["TRIP_RUNNING"] == "1") "Rodando" else "Pausado"
+        val screen = values["SCREEN"]?.toIntOrNull()?.let { screens.getOrNull(it) } ?: "—"
+        val musicName = values["MUSIC"]?.toIntOrNull()?.let { music.getOrNull(it) } ?: "—"
+        return "MOCHI AO VIVO\\nModo: $mode  •  Expressão: $scene\\nTela: $screen  •  Música: $musicName\\nTrip: $tripTime ($tripState)"
     }
 
     private fun requestPermissionsThenScan() {
@@ -334,5 +516,12 @@ class SetupActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::status.isInitialized) updateConnectionUi(BleMochi.statusText)
+        statusHandler.removeCallbacks(statusRefresh)
+        statusHandler.post(statusRefresh)
+    }
+
+    override fun onPause() {
+        statusHandler.removeCallbacks(statusRefresh)
+        super.onPause()
     }
 }
